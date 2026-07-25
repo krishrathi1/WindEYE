@@ -252,8 +252,8 @@ export const pillDimensions = {
     borderRadius: 20,
   },
   expanded: {
-    width: 520,
-    height: 380,
+    width: 560,
+    height: 390,
     borderRadius: 28,
   },
 } as const;

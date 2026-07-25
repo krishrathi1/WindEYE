@@ -37,6 +37,8 @@ import { LiveActivityCompact, LiveActivitiesExpanded } from "./modules/LiveActiv
 import { ShelfExpanded } from "./modules/ShelfModule";
 import { DisplaySettings } from "./modules/DisplaySettings";
 import { MinimalBubble } from "./MinimalBubble";
+import { LyricsExpanded } from "./modules/LyricsModule";
+import { useLyrics } from "../../hooks/useLyrics";
 import { usePillDrag } from "../../hooks/usePillDrag";
 import { usePrivacyIndicators } from "../../hooks/usePrivacyIndicators";
 import { useHudOverlay } from "../../hooks/useHudOverlay";
@@ -58,7 +60,7 @@ import { createPillThemeTokens, resolveReducedMotion } from "./themeTokens";
 const TIMER_NOTIFICATION_TITLE = "WINDEYE Timer Complete";
 
 // Tab type for expanded view
-type ExpandedTab = "timer" | "media" | "notifications" | "settings" | "prism" | "productivity" | "clipboard" | "shelf";
+type ExpandedTab = "timer" | "media" | "notifications" | "settings" | "prism" | "productivity" | "clipboard" | "shelf" | "lyrics";
 const EXPANDED_TAB_CONFIG: Array<{ id: ExpandedTab; label: string; icon: string; ariaLabel: string; hasBadge?: boolean }> = [
   { id: "timer", label: "Timer", icon: "⏱", ariaLabel: "Timer module" },
   { id: "media", label: "Media", icon: "🎵", ariaLabel: "Media controls" },
@@ -66,6 +68,7 @@ const EXPANDED_TAB_CONFIG: Array<{ id: ExpandedTab; label: string; icon: string;
   { id: "settings", label: "Settings", icon: "⚙", ariaLabel: "Settings" },
   { id: "productivity", label: "Focus", icon: "✓", ariaLabel: "Productivity module" },
   { id: "clipboard", label: "Clips", icon: "📋", ariaLabel: "Clipboard history" },
+  { id: "lyrics", label: "Lyrics", icon: "🎤", ariaLabel: "Synced lyrics" },
   { id: "shelf", label: "Shelf", icon: "📎", ariaLabel: "File shelf" },
   { id: "prism", label: "Prism", icon: "AI", ariaLabel: "Prism AI assistant" },
 ];
@@ -440,6 +443,16 @@ export function Pill() {
 
   // Clipboard history only polls while its tab is open (WinRT async round-trip).
   const clipboard = useClipboardHistory(isExpanded && activeTab === "clipboard");
+
+  // Synced lyrics — fetched once per track, timed against the media position.
+  const lyrics = useLyrics({
+    enabled: isExpanded && activeTab === "lyrics",
+    title: media?.title,
+    artist: media?.artist,
+    album: media?.album,
+    durationMs: timeline?.durationMs,
+    positionMs: timeline?.positionMs ?? 0,
+  });
 
   // File shelf — drag files onto the pill to park them.
   const shelf = useFileShelf(true);
@@ -992,6 +1005,7 @@ export function Pill() {
         settings: "Settings",
         clipboard: "Clipboard",
         shelf: "Shelf",
+        lyrics: "Lyrics",
         productivity: "Productivity",
         prism: "Prism AI",
       };
@@ -1846,6 +1860,35 @@ export function Pill() {
                       isLoading={clipboard.isLoading}
                       onCopy={clipboard.copy}
                     />
+                  </motion.div>
+                )}
+
+                {activeTab === "lyrics" && (
+                  <motion.div
+                    key="lyrics"
+                    id="panel-lyrics"
+                    role="tabpanel"
+                    aria-labelledby="tab-lyrics"
+                    className="flex flex-col flex-1 min-h-0"
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 20 }}
+                    transition={{ duration: panelTransitionDuration }}
+                  >
+                    {media ? (
+                      <LyricsExpanded
+                        lines={lyrics.lines}
+                        plain={lyrics.plain}
+                        activeIndex={lyrics.activeIndex}
+                        isLoading={lyrics.isLoading}
+                        error={lyrics.error}
+                        accentColor={effectiveAccentColor}
+                      />
+                    ) : (
+                      <p className="text-[12px] text-white/45 text-center py-3">
+                        Play something to see lyrics
+                      </p>
+                    )}
                   </motion.div>
                 )}
 

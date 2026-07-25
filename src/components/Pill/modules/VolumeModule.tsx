@@ -659,6 +659,7 @@ export function QuickSettings({
                   productivity: true,
                   clipboard: true,
                   shelf: true,
+                  lyrics: true,
                 },
                 idle_indicators: {
                   media: true,

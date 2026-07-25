@@ -258,6 +258,20 @@ export const platformApi = {
     return tauriInvoke("arm_flyout_suppression", { durationMs: durationMs ?? null });
   },
 
+  async getLyrics(artist: string, title: string, album?: string, durationSec?: number) {
+    return tauriInvoke<{
+      synced: string | null;
+      plain: string | null;
+      track_name: string;
+      artist_name: string;
+    } | null>("get_lyrics", {
+      artist,
+      title,
+      album: album ?? null,
+      durationSec: durationSec ?? null,
+    });
+  },
+
   async revealInExplorer(path: string) {
     return tauriInvoke("reveal_in_explorer", { path });
   },

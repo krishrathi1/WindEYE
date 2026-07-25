@@ -207,6 +207,8 @@ pub struct LayoutVisibleTabsData {
     #[serde(default = "default_true")]
     pub shelf: bool,
     #[serde(default = "default_true")]
+    pub lyrics: bool,
+    #[serde(default = "default_true")]
     pub prism: bool,
     #[serde(default = "default_true")]
     pub productivity: bool,
@@ -281,6 +283,7 @@ impl Default for LayoutVisibleTabsData {
             settings: true,
             clipboard: true,
             shelf: true,
+            lyrics: true,
             prism: true,
             productivity: true,
         }
@@ -3931,6 +3934,119 @@ fn arm_flyout_suppression(duration_ms: Option<u64>) -> Result<(), String> {
     Ok(())
 }
 
+// =============================================================================
+// Synced lyrics (LRCLIB — free, no API key, no auth)
+//
+// Tries the exact-match endpoint first; it 404s for anything not in the database,
+// so we fall back to a search and take the best result that actually has synced
+// lyrics. Returns the raw LRC text for the frontend to parse and time.
+// =============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LyricsResult {
+    pub synced: Option<String>,
+    pub plain: Option<String>,
+    pub track_name: String,
+    pub artist_name: String,
+}
+
+#[tauri::command]
+async fn get_lyrics(
+    artist: String,
+    title: String,
+    album: Option<String>,
+    duration_sec: Option<u64>,
+) -> Result<Option<LyricsResult>, String> {
+    if artist.trim().is_empty() && title.trim().is_empty() {
+        return Ok(None);
+    }
+
+    let build = |v: &serde_json::Value| LyricsResult {
+        synced: v
+            .get("syncedLyrics")
+            .and_then(|s| s.as_str())
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| s.to_string()),
+        plain: v
+            .get("plainLyrics")
+            .and_then(|s| s.as_str())
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| s.to_string()),
+        track_name: v.get("trackName").and_then(|s| s.as_str()).unwrap_or(&title).to_string(),
+        artist_name: v.get("artistName").and_then(|s| s.as_str()).unwrap_or(&artist).to_string(),
+    };
+
+    // 1) Exact match, which also lets LRCLIB pick the right take by duration.
+    let mut url = format!(
+        "https://lrclib.net/api/get?artist_name={}&track_name={}",
+        urlencode(&artist),
+        urlencode(&title)
+    );
+    if let Some(a) = album.as_ref().filter(|a| !a.trim().is_empty()) {
+        url.push_str(&format!("&album_name={}", urlencode(a)));
+    }
+    if let Some(d) = duration_sec {
+        url.push_str(&format!("&duration={}", d));
+    }
+
+    if let Ok(resp) = HTTP_CLIENT.get(&url).send().await {
+        if resp.status().is_success() {
+            if let Ok(json) = resp.json::<serde_json::Value>().await {
+                let result = build(&json);
+                if result.synced.is_some() || result.plain.is_some() {
+                    return Ok(Some(result));
+                }
+            }
+        }
+    }
+
+    // 2) Fall back to search; prefer a hit that actually has synced lyrics.
+    let search_url = format!(
+        "https://lrclib.net/api/search?q={}",
+        urlencode(&format!("{} {}", artist, title).trim().to_string())
+    );
+    let resp = HTTP_CLIENT
+        .get(&search_url)
+        .send()
+        .await
+        .map_err(|e| format!("Lyrics search failed: {}", e))?;
+    if !resp.status().is_success() {
+        return Ok(None);
+    }
+    let results: serde_json::Value = resp
+        .json()
+        .await
+        .map_err(|e| format!("Lyrics parse failed: {}", e))?;
+    let Some(items) = results.as_array() else { return Ok(None) };
+
+    let best = items
+        .iter()
+        .find(|v| {
+            v.get("syncedLyrics")
+                .and_then(|s| s.as_str())
+                .map(|s| !s.trim().is_empty())
+                .unwrap_or(false)
+        })
+        .or_else(|| items.first());
+
+    Ok(best.map(build))
+}
+
+/// Minimal percent-encoding for query values (no extra dependency needed).
+fn urlencode(input: &str) -> String {
+    let mut out = String::with_capacity(input.len() * 3);
+    for byte in input.as_bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(*byte as char)
+            }
+            b' ' => out.push_str("%20"),
+            other => out.push_str(&format!("%{:02X}", other)),
+        }
+    }
+    out
+}
+
 /// Open Explorer with the given file selected. Used by the file shelf.
 #[cfg(target_os = "windows")]
 #[tauri::command]
@@ -4221,6 +4337,8 @@ pub fn run() {
             get_active_downloads,
             // File shelf
             reveal_in_explorer,
+            // Synced lyrics
+            get_lyrics,
             // Free pill repositioning
             set_pill_position,
             clear_pill_position,

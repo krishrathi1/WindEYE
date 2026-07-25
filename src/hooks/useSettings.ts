@@ -37,6 +37,7 @@ export interface LayoutSettingsData {
     productivity: boolean;
     clipboard: boolean;
     shelf: boolean;
+    lyrics: boolean;
   };
   idle_indicators: {
     media: boolean;
@@ -82,6 +83,7 @@ export const SETTINGS_DEFAULTS: AppSettings = {
       productivity: true,
       clipboard: true,
       shelf: true,
+      lyrics: true,
     },
     idle_indicators: {
       media: true,
