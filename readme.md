@@ -154,7 +154,3 @@ MIT — see [LICENSE](LICENSE).
 
 ---
 
-<div align="center">
-  <sub><strong>WINDEYE</strong> — a Dynamic Island for Windows 10 &amp; 11. Free &amp; open source.</sub><br/>
-  <a href="https://pillar-dynamic-island.vercel.app">pillar-dynamic-island.vercel.app</a>
-</div>
